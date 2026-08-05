@@ -30,25 +30,85 @@ st.markdown("""
         background-color: #1e293b;
         color: white;
     }
+    .instruction-card {
+        background-color: #f1f5f9;
+        border-left: 5px solid #0f172a;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 st.title("📊 HRIS FMLA & Leave Claim Automation")
-st.caption("Paste the combined Unum Email Request and SAP Attendance Table below to generate an audit report and email reply.")
+st.caption("Automated Unum Request & SAP Time Verification Tool | Benefits & HRIS Analytics")
 
-# Main Input Section
+# ==============================================================================
+# INSTRUCTIONS GUIDE
+# ==============================================================================
+with st.expander("📖 Step-by-Step Instructions (How to Use This Tool)", expanded=True):
+    st.markdown("""
+    1. **Copy Unum Email Request:** Open the leave request email in your Benefits Analyst inbox and copy the full text (contains Employee Name, ID, and required date range).
+    2. **Run SAP Time Report:**
+       * Open SAP and go to **Cumulated Time Evaluation Results: Time Balances/Wage Types**.
+       * Enter the **Personnel Number** (Employee ID).
+       * Select **Other period** and enter the `Period` (Start Date) and `To` (End Date) specified in the Unum email.
+       * Ensure Day balances is set to `0701` and Layout is `/TOTAL_HOURS`.
+       * Execute the report (press **F8** or click the Green Checkmark).
+    3. **Copy SAP Results to Clipboard:**
+       * In SAP, click **System / File** $\rightarrow$ **Save to Local File** $\rightarrow$ select **In a clipboard** (or click the Clipboard icon).
+    4. **Paste & Process:**
+       * Paste **both** the copied Unum email text AND the copied SAP clipboard table together into the box below.
+       * Click **🚀 Process Claim & Generate Report**.
+    """)
+
+# ==============================================================================
+# ANONYMOUS SAMPLE DATA
+# ==============================================================================
+SAMPLE_ANONYMOUS_TEXT = """Employee Name: Anthony Cortez
+Employee ID#: 01234567
+Employee Phone #: (000) 000-0000
+Leave Number: 99999999
+
+Additional information is required to determine eligibility and/or available leave entitlement under STD/FMLA/State law for the above employee. Please reply to this e-mail by 3 p.m. EST on 08/05/26 with the requested information below. Failure to reply by the above time and date could delay Unum’s response to the employee’s request for leave.
+
+Hours worked:
+
+Total number of actual hours worked (including overtime hours) during the 12-month period of 08/02/25 through 08/05/26: ___________
+
+------------------------------------------------------------------------------------------------------------------------
+| Pers.No.|Employee/app.name  |Period|Date      |TmType|TimeTyText  |   Number|Cost Center  |PSubarea |Subarea|Cost Ctr|
+------------------------------------------------------------------------------------------------------------------------
+|  01234567|CORTEZ ANTHONY    |202508|08/02/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202508|08/04/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202508|08/05/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202608|08/05/2026|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+------------------------------------------------------------------------------------------------------------------------"""
+
+col_sample, col_clear = st.columns([3, 1])
+with col_sample:
+    if st.button("📋 Click Here to Insert Anonymous Example Claim"):
+        st.session_state["claim_input"] = SAMPLE_ANONYMOUS_TEXT
+
+with col_clear:
+    if st.button("🗑️ Clear Text Box"):
+        st.session_state["claim_input"] = ""
+
+# Main Text Area
 text_input = st.text_area(
-    "Paste Combined Unum Request + SAP Text Here:",
-    height=250,
-    placeholder="Employee Name: Alex I Contreras\nEmployee ID#: 06425427\n...\n\n| Pers.No.|Employee/app.name..."
+    "Paste Combined Unum Request + SAP Clipboard Text Here:",
+    key="claim_input",
+    height=260,
+    placeholder="Paste Unum Email and SAP Clipboard text here..."
 )
 
+# ==============================================================================
+# AUTOMATION ENGINE
+# ==============================================================================
 def parse_sap_table(text):
-    """Parses both Pipe-Delimited '|' and Tab-Delimited SAP outputs."""
     lines = text.split('\n')
     data_rows = []
     
-    # Try parsing pipe-delimited format
     pipe_rows = [l.strip() for l in lines if l.strip().startswith('|') and not l.strip().startswith('|*') and 'Pers.No.' not in l]
     if pipe_rows:
         for line_str in pipe_rows:
@@ -58,7 +118,6 @@ def parse_sap_table(text):
         headers = ['Pers.No.', 'Name', 'Period', 'Date', 'TmType', 'TimeTyText', 'Number', 'Cost Ctr', 'PSubarea', 'Subarea', 'Cost Ctr Ref']
         df = pd.DataFrame(data_rows, columns=headers)
     else:
-        # Fallback to tab/whitespace format
         sap_match = re.search(r"(Pers\.No\..*)", text, re.DOTALL)
         if not sap_match:
             return None
@@ -75,7 +134,6 @@ def parse_sap_table(text):
     return df
 
 def process_combined_text(raw_text):
-    # 1. Parse Unum Email Parameters
     emp_name_match = re.search(r"Employee Name:\s*(.+)", raw_text)
     emp_id_match = re.search(r"Employee ID#:\s*(\d+)", raw_text)
     leave_num_match = re.search(r"Leave Number:\s*(\d+)", raw_text)
@@ -85,8 +143,8 @@ def process_combined_text(raw_text):
     emp_id = emp_id_match.group(1).strip() if emp_id_match else "000000"
     leave_num = leave_num_match.group(1).strip() if leave_num_match else "N/A"
 
-    start_date_str = dates_match.group(1) if dates_match else "07/24/2025"
-    end_date_str = dates_match.group(2) if dates_match else "07/23/2026"
+    start_date_str = dates_match.group(1) if dates_match else "08/02/2025"
+    end_date_str = dates_match.group(2) if dates_match else "08/05/2026"
 
     clean_emp_id = str(emp_id).lstrip('0')
     last_name = emp_name.split()[-1]
@@ -101,15 +159,13 @@ def process_combined_text(raw_text):
     req_start = parse_dt(start_date_str)
     req_end = parse_dt(end_date_str)
 
-    # 2. Extract SAP Table
     df = parse_sap_table(raw_text)
     if df is None or df.empty:
-        st.error("Could not parse SAP table data. Please check input text format.")
+        st.error("Could not parse SAP table. Ensure table rows start with '|' pipe symbols or standard tab formatting.")
         return None, None, None
 
     df['Date_dt'] = pd.to_datetime(df['Date']).dt.date
 
-    # 3. Missing Boundary Check
     missing_dates = []
     if req_start not in df['Date_dt'].values:
         missing_dates.append(req_start.strftime("%m/%d/%Y"))
@@ -118,7 +174,6 @@ def process_combined_text(raw_text):
 
     df_filtered = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)].copy()
 
-    # 4. Excel Generation
     wb_out = openpyxl.Workbook()
     ws_out = wb_out.active
     ws_out.title = "FMLA Hours Log"
@@ -146,7 +201,6 @@ def process_combined_text(raw_text):
     BORDER_TOTAL = Border(top=Side(border_style="medium", color="0F172A"), bottom=Side(border_style="double", color="0F172A"), left=BORDER_SUBTLE, right=BORDER_SUBTLE)
     BORDER_CARD = Border(left=Side(border_style="thick", color="2563EB"), right=BORDER_SUBTLE, top=BORDER_SUBTLE, bottom=BORDER_SUBTLE)
 
-    # 4a. Header Banner & Subtitle
     ws_out.merge_cells("A1:K2")
     ws_out["A1"] = "  FMLA / STD HOURS WORKED VERIFICATION REPORT"
     ws_out["A1"].font = FONT_BANNER
@@ -156,7 +210,6 @@ def process_combined_text(raw_text):
     ws_out["A3"] = "  Official Attendance & Shift Log | Benefits & HRIS Department"
     ws_out["A3"].font = Font(name="Segoe UI", size=10, italic=True, color="64748B")
 
-    # 4b. Table Headers
     start_table_row = 5
     table_headers = ['Pers.No.', 'Name', 'Period', 'Date', 'TmType', 'TimeTyText', 'Number', 'Cost Ctr', 'PSubarea', 'Subarea', 'Cost Ctr Ref']
     for col_i, h_txt in enumerate(table_headers, start=1):
@@ -168,7 +221,6 @@ def process_combined_text(raw_text):
 
     ws_out.row_dimensions[start_table_row].height = 32
 
-    # 4c. Data Rows
     filtered_vals = df_filtered.iloc[:, :11].values
     for idx, r_vals in enumerate(filtered_vals, start=start_table_row + 1):
         ws_out.row_dimensions[idx].height = 22
@@ -196,7 +248,6 @@ def process_combined_text(raw_text):
                 cell.number_format = "#,##0.00"
                 cell.alignment = Alignment(horizontal="right", vertical="center")
 
-    # 4d. Total Row
     total_row = start_table_row + len(filtered_vals) + 1
     ws_out.row_dimensions[total_row].height = 26
     ws_out.cell(row=total_row, column=6, value="Total Hours:").font = FONT_TOTAL
@@ -214,12 +265,11 @@ def process_combined_text(raw_text):
         if c not in [6, 7]:
             ws_out.cell(row=total_row, column=c).border = Border(top=Side(border_style="medium", color="0F172A"), bottom=Side(border_style="thin", color="0F172A"))
 
-    # 4e. Missing Boundary Notes Under Table
     missing_note_row = (total_row - 1) + 5
     for i, m_date in enumerate(missing_dates):
         ws_out.cell(row=missing_note_row + i, column=1, value=f"Employee did not work {m_date}").font = FONT_ALERT_BODY
 
-    # 4f. CLAIM AUDIT & METRICS CARD (Columns M - P)
+    # Metrics Card
     ws_out.merge_cells("M1:P2")
     ws_out["M1"] = "CLAIM AUDIT & METRICS CARD"
     ws_out["M1"].font = FONT_BANNER
@@ -241,7 +291,6 @@ def process_combined_text(raw_text):
             ws_out.cell(row=idx, column=c).fill = CARD_BG_FILL
             ws_out.cell(row=idx, column=c).border = BORDER_CARD
 
-    # KPI 1: Total Actual Hours
     ws_out.merge_cells("M11:N11")
     ws_out["M11"] = "TOTAL ACTUAL HOURS WORKED"
     ws_out["M11"].font = FONT_KPI_LBL
@@ -253,7 +302,6 @@ def process_combined_text(raw_text):
     ws_out["M12"].number_format = "#,##0.00"
     ws_out["M12"].alignment = Alignment(horizontal="center", vertical="center")
 
-    # KPI 2: Total Shifts Logged
     ws_out.merge_cells("O11:P11")
     ws_out["O11"] = "TOTAL SHIFTS LOGGED"
     ws_out["O11"].font = FONT_KPI_LBL
@@ -270,7 +318,6 @@ def process_combined_text(raw_text):
             cell.fill = PatternFill(start_color="F8FAFC", fill_type="solid")
             cell.border = BORDER_GRID
 
-    # Missing Dates & Audit Exceptions Box
     ws_out.merge_cells("M16:P16")
     ws_out["M16"] = "MISSING DATES & AUDIT EXCEPTIONS"
     ws_out["M16"].font = FONT_ALERT_TITLE
@@ -287,7 +334,6 @@ def process_combined_text(raw_text):
         ws_out["M17"] = "No missing boundary dates detected."
         ws_out["M17"].font = FONT_BOLD
 
-    # Set Column Widths
     ws_out.column_dimensions['A'].width = 38
     ws_out.column_dimensions['B'].width = 28
     ws_out.column_dimensions['C'].width = 14
@@ -309,7 +355,6 @@ def process_combined_text(raw_text):
     wb_out.save(excel_buffer)
     excel_buffer.seek(0)
 
-    # 5. Build Email
     total_hours_val = df_filtered['Number'].sum()
     missing_text = f" and did not work on {' and '.join(missing_dates)}" if missing_dates else ""
 
@@ -326,7 +371,7 @@ Benefits/HRIS Analyst"""
 
     return email_response, excel_buffer, output_filename
 
-# Streamlit App UI
+# Process Action
 if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
