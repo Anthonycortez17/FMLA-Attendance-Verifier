@@ -43,24 +43,39 @@ text_input = st.text_area(
     placeholder="Employee Name: Alex I Contreras\nEmployee ID#: 06425427\n...\n\n| Pers.No.|Employee/app.name..."
 )
 
-def parse_sap_pipe_table(text):
+def parse_sap_table(text):
+    """Parses both Pipe-Delimited '|' and Tab-Delimited SAP outputs."""
     lines = text.split('\n')
     data_rows = []
-    for line in lines:
-        line_str = line.strip()
-        if line_str.startswith('|') and not line_str.startswith('|*') and 'Pers.No.' not in line_str:
+    
+    # Try parsing pipe-delimited format
+    pipe_rows = [l.strip() for l in lines if l.strip().startswith('|') and not l.strip().startswith('|*') and 'Pers.No.' not in l]
+    if pipe_rows:
+        for line_str in pipe_rows:
             parts = [p.strip() for p in line_str.split('|')[1:-1]]
             if len(parts) >= 11:
                 data_rows.append(parts[:11])
-    if not data_rows:
-        return None
-    headers = ['Pers.No.', 'Name', 'Period', 'Date', 'TmType', 'TimeTyText', 'Number', 'Cost Ctr', 'PSubarea', 'Subarea', 'Cost Ctr Ref']
-    df = pd.DataFrame(data_rows, columns=headers)
-    df['Number'] = pd.to_numeric(df['Number'].str.replace(',', ''), errors='coerce')
+        headers = ['Pers.No.', 'Name', 'Period', 'Date', 'TmType', 'TimeTyText', 'Number', 'Cost Ctr', 'PSubarea', 'Subarea', 'Cost Ctr Ref']
+        df = pd.DataFrame(data_rows, columns=headers)
+    else:
+        # Fallback to tab/whitespace format
+        sap_match = re.search(r"(Pers\.No\..*)", text, re.DOTALL)
+        if not sap_match:
+            return None
+        raw_sap = sap_match.group(1).strip()
+        try:
+            df = pd.read_csv(io.StringIO(raw_sap), sep=r'\t+|\s{2,}', engine='python')
+        except Exception:
+            df = pd.read_csv(io.StringIO(raw_sap), sep=None, engine='python')
+        headers = [str(c).strip() for c in df.columns[:11]]
+        df.columns = headers + list(df.columns[11:])
+        df = df.dropna(subset=[headers[0]]).copy()
+
+    df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(',', ''), errors='coerce')
     return df
 
 def process_combined_text(raw_text):
-    # 1. Parse Unum Email
+    # 1. Parse Unum Email Parameters
     emp_name_match = re.search(r"Employee Name:\s*(.+)", raw_text)
     emp_id_match = re.search(r"Employee ID#:\s*(\d+)", raw_text)
     leave_num_match = re.search(r"Leave Number:\s*(\d+)", raw_text)
@@ -69,7 +84,7 @@ def process_combined_text(raw_text):
     emp_name = emp_name_match.group(1).strip() if emp_name_match else "Employee"
     emp_id = emp_id_match.group(1).strip() if emp_id_match else "000000"
     leave_num = leave_num_match.group(1).strip() if leave_num_match else "N/A"
-    
+
     start_date_str = dates_match.group(1) if dates_match else "07/24/2025"
     end_date_str = dates_match.group(2) if dates_match else "07/23/2026"
 
@@ -87,9 +102,9 @@ def process_combined_text(raw_text):
     req_end = parse_dt(end_date_str)
 
     # 2. Extract SAP Table
-    df = parse_sap_pipe_table(raw_text)
+    df = parse_sap_table(raw_text)
     if df is None or df.empty:
-        st.error("Could not parse SAP table. Ensure table rows start with '|' pipe symbols.")
+        st.error("Could not parse SAP table data. Please check input text format.")
         return None, None, None
 
     df['Date_dt'] = pd.to_datetime(df['Date']).dt.date
@@ -131,12 +146,17 @@ def process_combined_text(raw_text):
     BORDER_TOTAL = Border(top=Side(border_style="medium", color="0F172A"), bottom=Side(border_style="double", color="0F172A"), left=BORDER_SUBTLE, right=BORDER_SUBTLE)
     BORDER_CARD = Border(left=Side(border_style="thick", color="2563EB"), right=BORDER_SUBTLE, top=BORDER_SUBTLE, bottom=BORDER_SUBTLE)
 
+    # 4a. Header Banner & Subtitle
     ws_out.merge_cells("A1:K2")
     ws_out["A1"] = "  FMLA / STD HOURS WORKED VERIFICATION REPORT"
     ws_out["A1"].font = FONT_BANNER
     ws_out["A1"].fill = PatternFill(start_color=NAVY_PRIMARY, fill_type="solid")
     ws_out["A1"].alignment = Alignment(horizontal="left", vertical="center")
 
+    ws_out["A3"] = "  Official Attendance & Shift Log | Benefits & HRIS Department"
+    ws_out["A3"].font = Font(name="Segoe UI", size=10, italic=True, color="64748B")
+
+    # 4b. Table Headers
     start_table_row = 5
     table_headers = ['Pers.No.', 'Name', 'Period', 'Date', 'TmType', 'TimeTyText', 'Number', 'Cost Ctr', 'PSubarea', 'Subarea', 'Cost Ctr Ref']
     for col_i, h_txt in enumerate(table_headers, start=1):
@@ -148,6 +168,7 @@ def process_combined_text(raw_text):
 
     ws_out.row_dimensions[start_table_row].height = 32
 
+    # 4c. Data Rows
     filtered_vals = df_filtered.iloc[:, :11].values
     for idx, r_vals in enumerate(filtered_vals, start=start_table_row + 1):
         ws_out.row_dimensions[idx].height = 22
@@ -175,14 +196,114 @@ def process_combined_text(raw_text):
                 cell.number_format = "#,##0.00"
                 cell.alignment = Alignment(horizontal="right", vertical="center")
 
+    # 4d. Total Row
     total_row = start_table_row + len(filtered_vals) + 1
+    ws_out.row_dimensions[total_row].height = 26
     ws_out.cell(row=total_row, column=6, value="Total Hours:").font = FONT_TOTAL
+    ws_out.cell(row=total_row, column=6).alignment = Alignment(horizontal="right", vertical="center")
     ws_out.cell(row=total_row, column=6).border = BORDER_TOTAL
+
     sum_cell = ws_out.cell(row=total_row, column=7, value=f"=SUM(G6:G{total_row-1})")
     sum_cell.font = FONT_TOTAL
     sum_cell.number_format = "#,##0.00"
     sum_cell.fill = GOLD_TOTAL_FILL
+    sum_cell.alignment = Alignment(horizontal="right", vertical="center")
     sum_cell.border = BORDER_TOTAL
+
+    for c in range(1, 12):
+        if c not in [6, 7]:
+            ws_out.cell(row=total_row, column=c).border = Border(top=Side(border_style="medium", color="0F172A"), bottom=Side(border_style="thin", color="0F172A"))
+
+    # 4e. Missing Boundary Notes Under Table
+    missing_note_row = (total_row - 1) + 5
+    for i, m_date in enumerate(missing_dates):
+        ws_out.cell(row=missing_note_row + i, column=1, value=f"Employee did not work {m_date}").font = FONT_ALERT_BODY
+
+    # 4f. CLAIM AUDIT & METRICS CARD (Columns M - P)
+    ws_out.merge_cells("M1:P2")
+    ws_out["M1"] = "CLAIM AUDIT & METRICS CARD"
+    ws_out["M1"].font = FONT_BANNER
+    ws_out["M1"].fill = PatternFill(start_color=NAVY_PRIMARY, fill_type="solid")
+    ws_out["M1"].alignment = Alignment(horizontal="center", vertical="center")
+
+    info_card = [
+        ("Employee Name:", emp_name),
+        ("Employee ID#:", str(clean_emp_id)),
+        ("Leave Number:", str(leave_num)),
+        ("Requested Period:", f"{req_start.strftime('%m/%d/%Y')} – {req_end.strftime('%m/%d/%Y')}"),
+    ]
+
+    for idx, (lbl, val) in enumerate(info_card, start=5):
+        ws_out.cell(row=idx, column=13, value=lbl).font = Font(name="Segoe UI", size=10, bold=True, color="64748B")
+        ws_out.merge_cells(start_row=idx, start_column=14, end_row=idx, end_column=16)
+        ws_out.cell(row=idx, column=14, value=val).font = FONT_BOLD
+        for c in range(13, 17):
+            ws_out.cell(row=idx, column=c).fill = CARD_BG_FILL
+            ws_out.cell(row=idx, column=c).border = BORDER_CARD
+
+    # KPI 1: Total Actual Hours
+    ws_out.merge_cells("M11:N11")
+    ws_out["M11"] = "TOTAL ACTUAL HOURS WORKED"
+    ws_out["M11"].font = FONT_KPI_LBL
+    ws_out["M11"].alignment = Alignment(horizontal="center")
+
+    ws_out.merge_cells("M12:N14")
+    ws_out["M12"] = f"=G{total_row}"
+    ws_out["M12"].font = FONT_KPI_VAL
+    ws_out["M12"].number_format = "#,##0.00"
+    ws_out["M12"].alignment = Alignment(horizontal="center", vertical="center")
+
+    # KPI 2: Total Shifts Logged
+    ws_out.merge_cells("O11:P11")
+    ws_out["O11"] = "TOTAL SHIFTS LOGGED"
+    ws_out["O11"].font = FONT_KPI_LBL
+    ws_out["O11"].alignment = Alignment(horizontal="center")
+
+    ws_out.merge_cells("O12:P14")
+    ws_out["O12"] = f"=COUNT(G6:G{total_row-1})"
+    ws_out["O12"].font = FONT_KPI_VAL
+    ws_out["O12"].alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in range(11, 15):
+        for c in range(13, 17):
+            cell = ws_out.cell(row=r, column=c)
+            cell.fill = PatternFill(start_color="F8FAFC", fill_type="solid")
+            cell.border = BORDER_GRID
+
+    # Missing Dates & Audit Exceptions Box
+    ws_out.merge_cells("M16:P16")
+    ws_out["M16"] = "MISSING DATES & AUDIT EXCEPTIONS"
+    ws_out["M16"].font = FONT_ALERT_TITLE
+    ws_out["M16"].fill = ALERT_BG_FILL
+    ws_out["M16"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+
+    if missing_dates:
+        for i, m_d in enumerate(missing_dates):
+            r_idx = 17 + i
+            ws_out.merge_cells(start_row=r_idx, start_column=13, end_row=r_idx, end_column=16)
+            ws_out.cell(row=r_idx, column=13, value=f"Employee did not work {m_d}").font = FONT_ALERT_BODY
+    else:
+        ws_out.merge_cells("M17:P17")
+        ws_out["M17"] = "No missing boundary dates detected."
+        ws_out["M17"].font = FONT_BOLD
+
+    # Set Column Widths
+    ws_out.column_dimensions['A'].width = 38
+    ws_out.column_dimensions['B'].width = 28
+    ws_out.column_dimensions['C'].width = 14
+    ws_out.column_dimensions['D'].width = 16
+    ws_out.column_dimensions['E'].width = 14
+    ws_out.column_dimensions['F'].width = 17
+    ws_out.column_dimensions['G'].width = 18
+    ws_out.column_dimensions['H'].width = 18
+    ws_out.column_dimensions['I'].width = 14
+    ws_out.column_dimensions['J'].width = 14
+    ws_out.column_dimensions['K'].width = 17
+    ws_out.column_dimensions['L'].width = 4
+    ws_out.column_dimensions['M'].width = 22
+    ws_out.column_dimensions['N'].width = 22
+    ws_out.column_dimensions['O'].width = 22
+    ws_out.column_dimensions['P'].width = 28
 
     excel_buffer = io.BytesIO()
     wb_out.save(excel_buffer)
@@ -205,7 +326,7 @@ Benefits/HRIS Analyst"""
 
     return email_response, excel_buffer, output_filename
 
-# Process Action
+# Streamlit App UI
 if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
