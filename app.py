@@ -44,6 +44,30 @@ st.title("📊 HRIS FMLA & Leave Claim Automation")
 st.caption("Automated Unum Request & SAP Time Verification Tool | Benefits & HRIS Analytics")
 
 # ==============================================================================
+# SESSION USER SETTINGS (Dynamic Analyst Name & Title)
+# ==============================================================================
+st.subheader("👤 Analyst Signature Settings (Active Session Only)")
+col_user_name, col_user_title = st.columns(2)
+
+with col_user_name:
+    analyst_name = st.text_input(
+        "Your Name (for email signature):",
+        value="Anthony Cortez",
+        key="session_analyst_name",
+        help="Type your name once. It will stay saved as long as this tab is open and reset when closed."
+    )
+
+with col_user_title:
+    analyst_title = st.text_input(
+        "Your Title:",
+        value="Costco Benefits/HRIS Analyst",
+        key="session_analyst_title",
+        help="Type your job title once. It will stay saved for this browser session."
+    )
+
+st.markdown("---")
+
+# ==============================================================================
 # INSTRUCTIONS GUIDE
 # ==============================================================================
 with st.expander("📖 Step-by-Step Instructions (How to Use This Tool)", expanded=True):
@@ -133,7 +157,7 @@ def parse_sap_table(text):
     df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(',', ''), errors='coerce')
     return df
 
-def process_combined_text(raw_text):
+def process_combined_text(raw_text, sender_name, sender_title):
     emp_name_match = re.search(r"Employee Name:\s*(.+)", raw_text)
     emp_id_match = re.search(r"Employee ID#:\s*(\d+)", raw_text)
     leave_num_match = re.search(r"Leave Number:\s*(\d+)", raw_text)
@@ -358,6 +382,7 @@ def process_combined_text(raw_text):
     total_hours_val = df_filtered['Number'].sum()
     missing_text = f" and did not work on {' and '.join(missing_dates)}" if missing_dates else ""
 
+    # DYNAMIC SIGNATURE
     email_response = f"""Per your request. Please see attached report to determine eligible hours. 
 
 Employee logged {total_hours_val:,.2f} total hours worked{missing_text}. 
@@ -366,8 +391,8 @@ Direct any questions to your supervisor.
 
 Thank you,
 
-Anthony Cortez
-Benefits/HRIS Analyst"""
+{sender_name}
+{sender_title}"""
 
     return email_response, excel_buffer, output_filename
 
@@ -376,7 +401,11 @@ if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
     else:
-        email_txt, excel_data, filename = process_combined_text(text_input)
+        email_txt, excel_data, filename = process_combined_text(
+            text_input,
+            analyst_name.strip() if analyst_name.strip() else "Anthony Cortez",
+            analyst_title.strip() if analyst_title.strip() else "Costco Benefits/HRIS Analyst"
+        )
         if email_txt:
             st.success("Claim audit complete!")
             st.subheader("✉️ Ready-to-Send Email Reply")
