@@ -9,44 +9,123 @@ import streamlit as st
 
 # Page Configuration
 st.set_page_config(
-    page_title="HRIS Leave Claim Automation",
-    page_icon="📊",
+    page_title="HRIS Leave Claim Automation | Benefits Analytics",
+    page_icon="🔴",
     layout="wide"
 )
 
-# Custom Styling
+# ==============================================================================
+# COSTCO CORPORATE BRANDING & CUSTOM CSS
+# ==============================================================================
 st.markdown("""
     <style>
-    .main { background-color: #f8fafc; }
+    /* Main Background */
+    .stApp {
+        background-color: #F8FAFC;
+    }
+
+    /* Executive Header Banner */
+    .costco-banner {
+        background: linear-gradient(135deg, #002B49 0%, #005DAA 100%);
+        padding: 24px 32px;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+        border-bottom: 5px solid #E31837;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+    }
+    .costco-logo-img {
+        height: 52px;
+        background-color: white;
+        padding: 8px 14px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    .costco-banner-title {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        font-size: 2.1rem;
+        font-weight: 800;
+        color: #FFFFFF !important;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .costco-banner-sub {
+        font-size: 1.05rem;
+        color: #E2E8F0 !important;
+        margin-top: 4px;
+        margin-bottom: 0;
+    }
+
+    /* Signature Settings Card */
+    .card-box {
+        background-color: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-left: 5px solid #005DAA;
+        padding: 18px 22px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    }
+    .card-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #002B49;
+        margin-bottom: 12px;
+    }
+
+    /* Costco Red Primary Button */
     .stButton>button {
         width: 100%;
-        background-color: #0f172a;
-        color: white;
-        font-weight: bold;
-        border-radius: 8px;
-        height: 3em;
+        background-color: #E31837 !important;
+        color: white !important;
+        font-size: 1.05rem !important;
+        font-weight: 700 !important;
+        border-radius: 8px !important;
+        border: none !important;
+        height: 3.2em !important;
+        box-shadow: 0 3px 8px rgba(227, 24, 55, 0.25) !important;
+        transition: all 0.2s ease-in-out !important;
     }
     .stButton>button:hover {
-        background-color: #1e293b;
-        color: white;
+        background-color: #C0132D !important;
+        transform: translateY(-1px);
+        box-shadow: 0 5px 14px rgba(227, 24, 55, 0.35) !important;
     }
-    .instruction-card {
-        background-color: #f1f5f9;
-        border-left: 5px solid #0f172a;
-        padding: 15px;
-        border-radius: 6px;
-        margin-bottom: 20px;
+
+    /* Expander Header */
+    .streamlit-expanderHeader {
+        background-color: #FFFFFF !important;
+        border-radius: 8px !important;
+        border: 1px solid #CBD5E1 !important;
+        font-weight: 600 !important;
+        color: #002B49 !important;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("📊 HRIS FMLA & Leave Claim Automation")
-st.caption("Automated Unum Request & SAP Time Verification Tool | Benefits & HRIS Analytics")
+# Header Banner with Logo
+st.markdown("""
+    <div class="costco-banner">
+        <img class="costco-logo-img" src="https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo.svg" alt="Costco Logo">
+        <div>
+            <div class="costco-banner-title">HRIS FMLA & Leave Claim Automation</div>
+            <div class="costco-banner-sub">Automated Unum Request & SAP Time Verification Platform | Benefits Analytics</div>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # SESSION USER SETTINGS (Dynamic Analyst Name & Title)
 # ==============================================================================
-st.subheader("👤 Analyst Signature Settings (Active Session Only)")
+st.markdown("""
+    <div class="card-box">
+        <div class="card-title">👤 Analyst Signature Settings (Active Session Only)</div>
+    </div>
+""", unsafe_allow_html=True)
+
 col_user_name, col_user_title = st.columns(2)
 
 with col_user_name:
@@ -54,7 +133,7 @@ with col_user_name:
         "Your Name (for email signature):",
         value="Anthony Cortez",
         key="session_analyst_name",
-        help="Type your name once. It will stay saved as long as this tab is open and reset when closed."
+        help="Type your name once. It stays saved as long as this tab is open and resets when closed."
     )
 
 with col_user_title:
@@ -62,7 +141,7 @@ with col_user_title:
         "Your Title:",
         value="Costco Benefits/HRIS Analyst",
         key="session_analyst_title",
-        help="Type your job title once. It will stay saved for this browser session."
+        help="Type your job title once. It stays saved for this browser session."
     )
 
 st.markdown("---")
@@ -191,9 +270,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
     df_filtered = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)].copy()
     df_filtered = df_filtered.sort_values(by='Date_dt')
 
-    # ==========================================================================
     # AUDIT CHECK: MISSING BOUNDARIES & >10 DAYS LEAVE GAPS
-    # ==========================================================================
     missing_dates = []
     sap_warnings = []
     
