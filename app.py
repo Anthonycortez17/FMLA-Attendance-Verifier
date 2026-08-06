@@ -1,3 +1,4 @@
+```python
 import io
 import re
 import datetime
@@ -52,7 +53,7 @@ st.markdown("""
         margin-top: 6px;
     }
 
-    /* Adaptive Card Containers (Supports both Light and Dark themes) */
+    /* Adaptive Card Containers */
     .card-container {
         background-color: rgba(0, 93, 170, 0.05);
         border: 1px solid rgba(0, 93, 170, 0.2);
@@ -151,7 +152,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ==============================================================================
 with st.expander("📖 Step-by-Step Instructions (How to Use This Tool)", expanded=True):
     st.markdown("""
-    1. **Copy Unum Email Request:** Open the leave request email in your Benefits Analyst inbox and copy the full text (contains Employee Name, ID, and required date range).
+    1. **Copy Unum Email Request:** Open the leave request email in your Benefits Analyst inbox and copy the full text (contains Employee Name, ID, required date range, and employment history).
     2. **Run SAP Time Report:**
        * Open SAP and go to **Cumulated Time Evaluation Results: Time Balances/Wage Types**.
        * Enter the **Personnel Number** (Employee ID).
@@ -173,11 +174,14 @@ Employee ID#: 01234567
 Employee Phone #: (000) 000-0000
 Leave Number: 99999999
 
+Hire Date: 4/4/2013 Termination Date: 8/24/2025
+Hire Date: 8/25/2025 Termination Date: N/A
+
 Additional information is required to determine eligibility and/or available leave entitlement under STD/FMLA/State law for the above employee. Please reply to this e-mail by 3 p.m. EST on 08/05/26 with the requested information below. Failure to reply by the above time and date could delay Unum’s response to the employee’s request for leave.
 
 Hours worked:
 
-Total number of actual hours worked (including overtime hours) during the 12-month period of 08/02/25 through 08/05/26: ___________
+Total number of actual hours worked (including overtime hours) during the 12-month period of July 20, 2025 through July 21, 2026: ___________
 
 ------------------------------------------------------------------------------------------------------------------------
 | Pers.No.|Employee/app.name  |Period|Date      |TmType|TimeTyText  |   Number|Cost Center  |PSubarea |Subarea|Cost Ctr|
@@ -235,11 +239,44 @@ def parse_sap_table(text):
     df['Number'] = pd.to_numeric(df['Number'].astype(str).str.replace(',', ''), errors='coerce')
     return df
 
+def parse_dt(d_str):
+    if not d_str:
+        return datetime.date.today()
+    d_str = d_str.strip().replace('_', '').strip()
+    
+    # Supported formats: Numeric (08/02/2025, 8/2/25) & Words (July 20, 2025, Jul 20 2025)
+    formats = (
+        "%m/%d/%Y", "%m/%d/%y", "%n/%d/%Y", "%n/%d/%y",
+        "%B %d, %Y", "%B %d %Y", "%b %d, %Y", "%b %d %Y"
+    )
+    for fmt in formats:
+        try:
+            return datetime.datetime.strptime(d_str, fmt).date()
+            except ValueError:
+            pass
+    return datetime.date.today()
+
 def process_combined_text(raw_text, sender_name, sender_title):
     emp_name_match = re.search(r"Employee Name:\s*(.+)", raw_text)
     emp_id_match = re.search(r"Employee ID#:\s*(\d+)", raw_text)
     leave_num_match = re.search(r"Leave Number:\s*(\d+)", raw_text)
-    dates_match = re.search(r"(\d{1,2}/\d{1,2}/\d{2,4})\s+through\s+(\d{1,2}/\d{1,2}/\d{2,4})", raw_text)
+
+    # DATES REGEX: Handles BOTH numeric (08/02/2025) and full month names (July 20, 2025)
+    dates_pattern = r"((?:[A-Za-z]+\s+\d{1,2},\s*\d{4})|(?:\d{1,2}/\d{1,2}/\d{2,4}))\s+through\s+((?:[A-Za-z]+\s+\d{1,2},\s*\d{4})|(?:\d{1,2}/\d{1,2}/\d{2,4}))"
+    dates_match = re.search(dates_pattern, raw_text, re.IGNORECASE)
+
+    # EXTRACT HIRE / TERMINATION DATES
+    employment_records = []
+    emp_history_matches = re.findall(
+        r"Hire\s*Date:\s*([^\s_]+(?:\s+\d{1,2},\s*\d{4})?)\s*Termination\s*Date:\s*([^\s_]+(?:\s+\d{1,2},\s*\d{4})?)",
+        raw_text,
+        re.IGNORECASE
+    )
+    for h_date, t_date in emp_history_matches:
+        h_clean = h_date.strip().replace('_', '')
+        t_clean = t_date.strip().replace('_', '')
+        if h_clean:
+            employment_records.append(f"Hire Date: {h_clean} | Term Date: {t_clean}")
 
     emp_name = emp_name_match.group(1).strip() if emp_name_match else "Employee"
     emp_id = emp_id_match.group(1).strip() if emp_id_match else "000000"
@@ -251,12 +288,6 @@ def process_combined_text(raw_text, sender_name, sender_title):
     clean_emp_id = str(emp_id).lstrip('0')
     last_name = emp_name.split()[-1]
     output_filename = f"{clean_emp_id} - {last_name}.xlsx"
-
-    def parse_dt(d_str):
-        for fmt in ("%m/%d/%Y", "%m/%d/%y"):
-            try: return datetime.datetime.strptime(d_str, fmt).date()
-            except ValueError: pass
-        return datetime.date.today()
 
     req_start = parse_dt(start_date_str)
     req_end = parse_dt(end_date_str)
@@ -419,49 +450,61 @@ def process_combined_text(raw_text, sender_name, sender_title):
             ws_out.cell(row=idx, column=c).fill = CARD_BG_FILL
             ws_out.cell(row=idx, column=c).border = BORDER_CARD
 
-    ws_out.merge_cells("M11:N11")
-    ws_out["M11"] = "TOTAL ACTUAL HOURS WORKED"
-    ws_out["M11"].font = FONT_KPI_LBL
-    ws_out["M11"].alignment = Alignment(horizontal="center")
+    # Add Employment History Records to Metrics Card
+    curr_r = 9
+    if employment_records:
+        ws_out.cell(row=curr_r, column=13, value="Employment History:").font = Font(name="Segoe UI", size=10, bold=True, color="64748B")
+        for rec in employment_records:
+            ws_out.merge_cells(start_row=curr_r, start_column=14, end_row=curr_r, end_column=16)
+            ws_out.cell(row=curr_r, column=14, value=rec).font = FONT_BOLD
+            for c in range(13, 17):
+                ws_out.cell(row=curr_r, column=c).fill = CARD_BG_FILL
+                ws_out.cell(row=curr_r, column=c).border = BORDER_CARD
+            curr_r += 1
 
-    ws_out.merge_cells("M12:N14")
-    ws_out["M12"] = f"=G{total_row}"
-    ws_out["M12"].font = FONT_KPI_VAL
-    ws_out["M12"].number_format = "#,##0.00"
-    ws_out["M12"].alignment = Alignment(horizontal="center", vertical="center")
+    ws_out.merge_cells(f"M{curr_r+1}:N{curr_r+1}")
+    ws_out[f"M{curr_r+1}"] = "TOTAL ACTUAL HOURS WORKED"
+    ws_out[f"M{curr_r+1}"].font = FONT_KPI_LBL
+    ws_out[f"M{curr_r+1}"].alignment = Alignment(horizontal="center")
 
-    ws_out.merge_cells("O11:P11")
-    ws_out["O11"] = "TOTAL SHIFTS LOGGED"
-    ws_out["O11"].font = FONT_KPI_LBL
-    ws_out["O11"].alignment = Alignment(horizontal="center")
+    ws_out.merge_cells(f"M{curr_r+2}:N{curr_r+4}")
+    ws_out[f"M{curr_r+2}"] = f"=G{total_row}"
+    ws_out[f"M{curr_r+2}"].font = FONT_KPI_VAL
+    ws_out[f"M{curr_r+2}"].number_format = "#,##0.00"
+    ws_out[f"M{curr_r+2}"].alignment = Alignment(horizontal="center", vertical="center")
 
-    ws_out.merge_cells("O12:P14")
-    ws_out["O12"] = f"=COUNT(G6:G{total_row-1})"
-    ws_out["O12"].font = FONT_KPI_VAL
-    ws_out["O12"].alignment = Alignment(horizontal="center", vertical="center")
+    ws_out.merge_cells(f"O{curr_r+1}:P{curr_r+1}")
+    ws_out[f"O{curr_r+1}"] = "TOTAL SHIFTS LOGGED"
+    ws_out[f"O{curr_r+1}"].font = FONT_KPI_LBL
+    ws_out[f"O{curr_r+1}"].alignment = Alignment(horizontal="center")
 
-    for r in range(11, 15):
+    ws_out.merge_cells(f"O{curr_r+2}:P{curr_r+4}")
+    ws_out[f"O{curr_r+2}"] = f"=COUNT(G6:G{total_row-1})"
+    ws_out[f"O{curr_r+2}"].font = FONT_KPI_VAL
+    ws_out[f"O{curr_r+2}"].alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in range(curr_r+1, curr_r+5):
         for c in range(13, 17):
             cell = ws_out.cell(row=r, column=c)
             cell.fill = PatternFill(start_color="F8FAFC", fill_type="solid")
             cell.border = BORDER_GRID
 
-    ws_out.merge_cells("M16:P16")
-    ws_out["M16"] = "MISSING DATES & AUDIT EXCEPTIONS"
-    ws_out["M16"].font = FONT_ALERT_TITLE
-    ws_out["M16"].fill = ALERT_BG_FILL
-    ws_out["M16"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws_out.merge_cells(f"M{curr_r+6}:P{curr_r+6}")
+    ws_out[f"M{curr_r+6}"] = "MISSING DATES & AUDIT EXCEPTIONS"
+    ws_out[f"M{curr_r+6}"].font = FONT_ALERT_TITLE
+    ws_out[f"M{curr_r+6}"].fill = ALERT_BG_FILL
+    ws_out[f"M{curr_r+6}"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
     all_exceptions = [f"Employee did not work {md}" for md in missing_dates] + sap_warnings
     if all_exceptions:
         for i, exc in enumerate(all_exceptions):
-            r_idx = 17 + i
+            r_idx = curr_r + 7 + i
             ws_out.merge_cells(start_row=r_idx, start_column=13, end_row=r_idx, end_column=16)
             ws_out.cell(row=r_idx, column=13, value=exc).font = FONT_ALERT_BODY
     else:
-        ws_out.merge_cells("M17:P17")
-        ws_out["M17"] = "No missing boundary dates or extended gaps detected."
-        ws_out["M17"].font = FONT_BOLD
+        ws_out.merge_cells(f"M{curr_r+7}:P{curr_r+7}")
+        ws_out[f"M{curr_r+7}"] = "No missing boundary dates or extended gaps detected."
+        ws_out[f"M{curr_r+7}"].font = FONT_BOLD
 
     ws_out.column_dimensions['A'].width = 38
     ws_out.column_dimensions['B'].width = 28
@@ -494,11 +537,12 @@ def process_combined_text(raw_text, sender_name, sender_title):
         email_notes.append(warn)
 
     notes_str = f" ({'; '.join(email_notes)})" if email_notes else ""
+    history_str = f"\nEmployment History Record:\n" + "\n".join([f"• {rec}" for rec in employment_records]) + "\n" if employment_records else ""
 
     email_response = f"""Per your request. Please see attached report to determine eligible hours. 
 
 Employee logged {total_hours_val:,.2f} total hours worked{notes_str}. 
-
+{history_str}
 Direct any questions to your supervisor.
 
 Thank you,
@@ -537,3 +581,5 @@ if st.button("🚀 Process Claim & Generate Report"):
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+```
