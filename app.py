@@ -15,79 +15,81 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# UNIVERSAL LIGHT & DARK MODE COMPATIBLE STYLES
+# COSTCO LOGO & DYNAMIC DARK/LIGHT ADAPTIVE CSS
 # ==============================================================================
+# Base64 embedded Costco logo from user uploaded image
+COSTCO_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo.svg"
+
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-    /* Global Typography & Background Override (Forces readability in Dark Mode) */
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        font-family: 'Inter', 'Segoe UI', Roboto, sans-serif !important;
-        background-color: #F8FAFC !important;
-        color: #0F172A !important;
+    /* Global Typography */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
 
-    /* Force all text elements to stay crisp dark slate in any theme */
-    p, span, label, h1, h2, h3, h4, h5, h6, li, div {
-        color: #0F172A !important;
+    /* Executive Costco Header */
+    .costco-header-card {
+        background: linear-gradient(135deg, #002B49 0%, #00437A 60%, #005DAA 100%);
+        padding: 24px 30px;
+        border-radius: 16px;
+        border-bottom: 5px solid #E31837;
+        box-shadow: 0 8px 24px rgba(0, 43, 73, 0.25);
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
     }
 
-    /* Executive Header Banner */
-    .costco-banner {
-        background: linear-gradient(135deg, #002B49 0%, #004B87 50%, #005DAA 100%);
-        padding: 24px 32px;
-        border-radius: 14px;
-        color: white !important;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 20px rgba(0, 43, 73, 0.15);
-        border-bottom: 6px solid #E31837;
+    .costco-logo-badge {
+        background-color: #FFFFFF;
+        padding: 10px 18px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        min-width: 150px;
     }
-    .costco-banner-title {
+
+    .costco-title-text {
+        color: #FFFFFF !important;
         font-size: 2.1rem;
         font-weight: 800;
-        color: #FFFFFF !important;
         margin: 0;
         letter-spacing: -0.5px;
+        line-height: 1.2;
     }
-    .costco-banner-sub {
-        font-size: 1.05rem;
-        color: #E2E8F0 !important;
-        margin-top: 6px;
+
+    .costco-subtitle-text {
+        color: #CBD5E1 !important;
+        font-size: 1.02rem;
         font-weight: 500;
+        margin-top: 6px;
     }
 
-    /* Input Fields (Dark & Light Mode Friendly) */
-    .stTextInput input, .stTextArea textarea {
-        background-color: #FFFFFF !important;
-        color: #0F172A !important;
-        border-radius: 10px !important;
-        border: 1px solid #CBD5E1 !important;
-        font-size: 0.98rem !important;
-    }
-    .stTextInput input:focus, .stTextArea textarea:focus {
-        border-color: #005DAA !important;
-        box-shadow: 0 0 0 3px rgba(0, 93, 170, 0.15) !important;
+    /* Adaptive Card Containers (Supports both Light and Dark themes) */
+    .card-container {
+        background-color: rgba(0, 93, 170, 0.05);
+        border: 1px solid rgba(0, 93, 170, 0.2);
+        border-left: 6px solid #005DAA;
+        padding: 20px 24px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        backdrop-filter: blur(8px);
     }
 
-    /* Container Cards */
-    .card-box {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E2E8F0 !important;
-        border-left: 6px solid #005DAA !important;
-        padding: 20px 24px !important;
-        border-radius: 12px !important;
-        margin-bottom: 15px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
-    }
-    .card-title {
+    .card-header-title {
         font-size: 1.15rem;
         font-weight: 700;
-        color: #002B49 !important;
-        margin-bottom: 4px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
-    /* Primary Red Costco Button */
+    /* Costco Red Primary Button */
     .stButton>button {
         width: 100%;
         background: linear-gradient(135deg, #E31837 0%, #C0132D 100%) !important;
@@ -97,24 +99,26 @@ st.markdown("""
         border-radius: 10px !important;
         border: none !important;
         height: 3.4em !important;
-        box-shadow: 0 4px 12px rgba(227, 24, 55, 0.3) !important;
+        box-shadow: 0 4px 14px rgba(227, 24, 55, 0.35) !important;
         transition: all 0.25s ease-in-out !important;
     }
+
     .stButton>button:hover {
-        background: linear-gradient(135deg, #C0132D 0%, #A00F24 100%) !important;
+        background: linear-gradient(135deg, #C0132D 0%, #9E0C22 100%) !important;
         transform: translateY(-2px) !important;
-        box-shadow: 0 6px 18px rgba(227, 24, 55, 0.4) !important;
+        box-shadow: 0 6px 20px rgba(227, 24, 55, 0.5) !important;
     }
 
-    /* Expander Container Override */
-    [data-testid="stExpander"] {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
-        border-radius: 12px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.02) !important;
+    /* Input Fields Styling */
+    .stTextInput input, .stTextArea textarea {
+        border-radius: 10px !important;
+        font-size: 0.98rem !important;
     }
-    [data-testid="stExpander"] * {
-        color: #0F172A !important;
+
+    /* Expander Container Adaptive Styling */
+    [data-testid="stExpander"] {
+        border-radius: 12px !important;
+        border: 1px solid rgba(0, 93, 170, 0.2) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -122,16 +126,18 @@ st.markdown("""
 # ==============================================================================
 # HEADER BANNER & COSTCO LOGO
 # ==============================================================================
-banner_col1, banner_col2 = st.columns([1, 6])
+banner_col1, banner_col2 = st.columns([1, 5])
 
 with banner_col1:
-    st.image("https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo.svg", width=140)
+    st.image(COSTCO_LOGO_URL, use_column_width=True)
 
 with banner_col2:
     st.markdown("""
-        <div class="costco-banner">
-            <div class="costco-banner-title">HRIS FMLA & Leave Claim Automation</div>
-            <div class="costco-banner-sub">Automated Unum Request & SAP Time Verification Platform | Benefits Analytics</div>
+        <div class="costco-header-card">
+            <div>
+                <div class="costco-title-text">HRIS FMLA & Leave Claim Automation</div>
+                <div class="costco-subtitle-text">Automated Unum Request & SAP Time Verification Platform | Benefits Analytics</div>
+            </div>
         </div>
     """, unsafe_allow_html=True)
 
@@ -139,9 +145,9 @@ with banner_col2:
 # SESSION USER SETTINGS (Dynamic Analyst Name & Title)
 # ==============================================================================
 st.markdown("""
-    <div class="card-box">
-        <div class="card-title">👤 Analyst Signature Settings (Active Session Only)</div>
-        <div style="color: #475569 !important; font-size: 0.9rem;">Configure your credentials below. These remain saved for your current browser tab.</div>
+    <div class="card-container">
+        <div class="card-header-title">👤 Analyst Signature Settings (Active Session Only)</div>
+        <div style="font-size: 0.9rem; opacity: 0.85;">Configure your credentials below. These remain saved for your current browser tab.</div>
     </div>
 """, unsafe_allow_html=True)
 
