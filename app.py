@@ -15,93 +15,118 @@ st.set_page_config(
 )
 
 # ==============================================================================
-# COSTCO CORPORATE BRANDING & CUSTOM CSS
+# ENHANCED COSTCO CORPORATE BRANDING & CUSTOM STYLES
 # ==============================================================================
 st.markdown("""
     <style>
-    /* Main Background */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    /* Global Typography */
+    html, body, [class*="css"] {
+        font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+    }
+
+    /* Main App Background */
     .stApp {
-        background-color: #F8FAFC;
+        background-color: #F1F5F9;
     }
 
     /* Executive Header Banner */
     .costco-banner {
-        background: linear-gradient(135deg, #002B49 0%, #005DAA 100%);
-        padding: 24px 32px;
-        border-radius: 12px;
+        background: linear-gradient(135deg, #002B49 0%, #004B87 50%, #005DAA 100%);
+        padding: 28px 36px;
+        border-radius: 16px;
         color: white;
         margin-bottom: 25px;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.1);
-        border-bottom: 5px solid #E31837;
+        box-shadow: 0 8px 20px rgba(0, 43, 73, 0.15);
+        border-bottom: 6px solid #E31837;
         display: flex;
         align-items: center;
-        gap: 24px;
+        gap: 28px;
     }
     .costco-logo-img {
-        height: 52px;
-        background-color: white;
-        padding: 8px 14px;
-        border-radius: 8px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        height: 56px;
+        background-color: #FFFFFF;
+        padding: 10px 16px;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
     }
     .costco-banner-title {
-        font-family: 'Segoe UI', Arial, sans-serif;
-        font-size: 2.1rem;
+        font-size: 2.2rem;
         font-weight: 800;
         color: #FFFFFF !important;
         margin: 0;
-        line-height: 1.2;
+        letter-spacing: -0.5px;
     }
     .costco-banner-sub {
         font-size: 1.05rem;
-        color: #E2E8F0 !important;
-        margin-top: 4px;
-        margin-bottom: 0;
+        color: #CBD5E1 !important;
+        margin-top: 6px;
+        font-weight: 500;
     }
 
-    /* Signature Settings Card */
+    /* Styled Container Cards */
     .card-box {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-left: 5px solid #005DAA;
-        padding: 18px 22px;
-        border-radius: 10px;
+        border-left: 6px solid #005DAA;
+        padding: 22px 26px;
+        border-radius: 12px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
     }
     .card-title {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 700;
         color: #002B49;
-        margin-bottom: 12px;
+        margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    /* Rounded Input Fields */
+    .stTextInput input, .stTextArea textarea {
+        border-radius: 10px !important;
+        border: 1px solid #CBD5E1 !important;
+        background-color: #FFFFFF !important;
+        font-size: 0.98rem !important;
+        transition: all 0.2s ease-in-out !important;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: #005DAA !important;
+        box-shadow: 0 0 0 3px rgba(0, 93, 170, 0.15) !important;
     }
 
     /* Costco Red Primary Button */
     .stButton>button {
         width: 100%;
-        background-color: #E31837 !important;
+        background: linear-gradient(135deg, #E31837 0%, #C0132D 100%) !important;
         color: white !important;
-        font-size: 1.05rem !important;
+        font-size: 1.1rem !important;
         font-weight: 700 !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         border: none !important;
-        height: 3.2em !important;
-        box-shadow: 0 3px 8px rgba(227, 24, 55, 0.25) !important;
-        transition: all 0.2s ease-in-out !important;
+        height: 3.4em !important;
+        box-shadow: 0 4px 12px rgba(227, 24, 55, 0.3) !important;
+        transition: all 0.25s ease-in-out !important;
+        cursor: pointer !important;
     }
     .stButton>button:hover {
-        background-color: #C0132D !important;
-        transform: translateY(-1px);
-        box-shadow: 0 5px 14px rgba(227, 24, 55, 0.35) !important;
+        background: linear-gradient(135deg, #C0132D 0%, #A00F24 100%) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 18px rgba(227, 24, 55, 0.4) !important;
     }
 
-    /* Expander Header */
+    /* Expander Styling */
     .streamlit-expanderHeader {
         background-color: #FFFFFF !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         border: 1px solid #CBD5E1 !important;
         font-weight: 600 !important;
         color: #002B49 !important;
+        padding: 14px 18px !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02) !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -123,6 +148,7 @@ st.markdown("""
 st.markdown("""
     <div class="card-box">
         <div class="card-title">👤 Analyst Signature Settings (Active Session Only)</div>
+        <div style="color: #64748B; font-size: 0.9rem;">Configure your credentials below. These remain saved for your current browser tab.</div>
     </div>
 """, unsafe_allow_html=True)
 
@@ -144,7 +170,7 @@ with col_user_title:
         help="Type your job title once. It stays saved for this browser session."
     )
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ==============================================================================
 # INSTRUCTIONS GUIDE
