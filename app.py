@@ -293,7 +293,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
     df = parse_sap_table(raw_text)
     if df is None or df.empty:
         st.error("Could not parse SAP table. Ensure table rows start with '|' pipe symbols or standard tab formatting.")
-        return None, None, None, []
+        return None, None, None, 0, 0, 0
 
     df['Date_dt'] = pd.to_datetime(df['Date']).dt.date
     df = df.sort_values(by='Date_dt')
@@ -306,29 +306,12 @@ def process_combined_text(raw_text, sender_name, sender_title):
     extra_sum = df_extra_period['Number'].sum()
     total_sap_sum = df['Number'].sum()
 
-    # AUDIT CHECK: MISSING BOUNDARIES & >10 DAYS LEAVE GAPS
+    # AUDIT CHECK: MISSING BOUNDARIES ONLY
     missing_dates = []
-    sap_warnings = []
-    
     if req_start not in df_req_period['Date_dt'].values:
         missing_dates.append(req_start.strftime("%m/%d/%Y"))
     if req_end not in df_req_period['Date_dt'].values:
         missing_dates.append(req_end.strftime("%m/%d/%Y"))
-
-    # Start-of-period gap check (> 10 Days)
-    if not df_req_period.empty:
-        first_sap_date = df_req_period['Date_dt'].min()
-        start_gap = (first_sap_date - req_start).days
-        if start_gap > 10:
-            msg = f"First worked date in SAP is {first_sap_date.strftime('%m/%d/%Y')} ({start_gap} days after requested start date {req_start.strftime('%m/%d/%Y')})."
-            sap_warnings.append(msg)
-
-        # End-of-period gap check (> 10 Days)
-        last_sap_date = df_req_period['Date_dt'].max()
-        end_gap = (req_end - last_sap_date).days
-        if end_gap > 10:
-            msg = f"Last worked date in SAP within requested period is {last_sap_date.strftime('%m/%d/%Y')} ({end_gap} days before requested end date {req_end.strftime('%m/%d/%Y')}). Check SAP Infotype 2001/2006 for leave/vacation."
-            sap_warnings.append(msg)
 
     # Build Excel
     wb_out = openpyxl.Workbook()
@@ -429,10 +412,6 @@ def process_combined_text(raw_text, sender_name, sender_title):
         ws_out.cell(row=missing_note_row + note_idx, column=1, value=f"Employee did not work {m_date}").font = FONT_ALERT_BODY
         note_idx += 1
 
-    for warn in sap_warnings:
-        ws_out.cell(row=missing_note_row + note_idx, column=1, value=warn).font = FONT_ALERT_BODY
-        note_idx += 1
-
     # Metrics Card
     ws_out.merge_cells("M1:P2")
     ws_out["M1"] = "CLAIM AUDIT & METRICS CARD"
@@ -455,7 +434,6 @@ def process_combined_text(raw_text, sender_name, sender_title):
             ws_out.cell(row=idx, column=c).fill = CARD_BG_FILL
             ws_out.cell(row=idx, column=c).border = BORDER_CARD
 
-    # Add Employment History Records to Metrics Card
     curr_r = 9
     if employment_records:
         ws_out.cell(row=curr_r, column=13, value="Employment History:").font = Font(name="Segoe UI", size=10, bold=True, color="64748B")
@@ -496,12 +474,12 @@ def process_combined_text(raw_text, sender_name, sender_title):
             cell.border = BORDER_GRID
 
     ws_out.merge_cells(f"M{curr_r+6}:P{curr_r+6}")
-    ws_out[f"M{curr_r+6}"] = "MISSING DATES & AUDIT EXCEPTIONS"
+    ws_out[f"M{curr_r+6}"] = "MISSING BOUNDARY DATES"
     ws_out[f"M{curr_r+6}"].font = FONT_ALERT_TITLE
     ws_out[f"M{curr_r+6}"].fill = ALERT_BG_FILL
     ws_out[f"M{curr_r+6}"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
-    all_exceptions = [f"Employee did not work {md}" for md in missing_dates] + sap_warnings
+    all_exceptions = [f"Employee did not work {md}" for md in missing_dates]
     if all_exceptions:
         for i, exc in enumerate(all_exceptions):
             r_idx = curr_r + 7 + i
@@ -509,7 +487,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
             ws_out.cell(row=r_idx, column=13, value=exc).font = FONT_ALERT_BODY
     else:
         ws_out.merge_cells(f"M{curr_r+7}:P{curr_r+7}")
-        ws_out[f"M{curr_r+7}"] = "No missing boundary dates or extended gaps detected."
+        ws_out[f"M{curr_r+7}"] = "No missing boundary dates detected."
         ws_out[f"M{curr_r+7}"].font = FONT_BOLD
 
     ws_out.column_dimensions['A'].width = 38
@@ -534,13 +512,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
     excel_buffer.seek(0)
 
     # DYNAMIC EMAIL RESPONSE WITH DETAILED DUAL SUM BREAKDOWN
-    email_notes = []
-    if missing_dates:
-        email_notes.append(f"did not work on {' and '.join(missing_dates)}")
-    for warn in sap_warnings:
-        email_notes.append(warn)
-
-    notes_str = f" ({'; '.join(email_notes)})" if email_notes else ""
+    notes_str = f" (did not work on {' and '.join(missing_dates)})" if missing_dates else ""
     history_str = f"\nEmployment History Record:\n" + "\n".join([f"• {rec}" for rec in employment_records]) + "\n" if employment_records else ""
 
     if extra_sum > 0:
@@ -563,14 +535,14 @@ Thank you,
 {sender_name}
 {sender_title}"""
 
-    return email_response, excel_buffer, output_filename, sap_warnings, requested_sum, extra_sum, total_sap_sum
+    return email_response, excel_buffer, output_filename, requested_sum, extra_sum, total_sap_sum
 
 # Process Action
 if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
     else:
-        email_txt, excel_data, filename, warnings, req_sum, extra_sum, total_sum = process_combined_text(
+        email_txt, excel_data, filename, req_sum, extra_sum, total_sum = process_combined_text(
             text_input,
             analyst_name.strip() if analyst_name.strip() else "Anthony Cortez",
             analyst_title.strip() if analyst_title.strip() else "Costco Benefits/HRIS Analyst"
@@ -587,11 +559,6 @@ if st.button("🚀 Process Claim & Generate Report"):
                 st.metric("Extra Days Sum (Post-Period)", f"{extra_sum:,.2f} hrs")
             with m_col3:
                 st.metric("Grand Total (Full SAP Table)", f"{total_sum:,.2f} hrs")
-
-            if warnings:
-                st.warning("⚠️ **SAP LEAVE DOUBLE-CHECK REQUIRED:**")
-                for w in warnings:
-                    st.write(f"• {w}")
 
             st.subheader("✉️ Ready-to-Send Email Reply")
             st.code(email_txt, language="text")
