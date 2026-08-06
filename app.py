@@ -19,7 +19,7 @@ st.set_page_config(
 # ==============================================================================
 st.markdown("""
     <style>
-    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap)');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
     /* Global Typography */
     html, body, [class*="css"] {
@@ -185,8 +185,8 @@ Total number of actual hours worked (including overtime hours) during the 12-mon
 ------------------------------------------------------------------------------------------------------------------------
 | Pers.No.|Employee/app.name  |Period|Date      |TmType|TimeTyText  |   Number|Cost Center  |PSubarea |Subarea|Cost Ctr|
 ------------------------------------------------------------------------------------------------------------------------
-|  01234567|CORTEZ ANTHONY    |202508|08/20/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
-|  01234567|CORTEZ ANTHONY    |202508|08/22/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202507|07/20/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202507|07/22/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
 |  01234567|CORTEZ ANTHONY    |202607|07/20/2026|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
 ------------------------------------------------------------------------------------------------------------------------"""
 
@@ -243,7 +243,6 @@ def parse_dt(d_str):
         return datetime.date.today()
     d_str = d_str.strip().replace('_', '').strip()
     
-    # Supported formats: Numeric (08/02/2025, 8/2/25) & Words (July 20, 2025, Jul 20 2025)
     formats = (
         "%m/%d/%Y", "%m/%d/%y",
         "%B %d, %Y", "%B %d %Y", "%b %d, %Y", "%b %d %Y"
@@ -260,7 +259,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
     emp_id_match = re.search(r"Employee ID#:\s*(\d+)", raw_text)
     leave_num_match = re.search(r"Leave Number:\s*(\d+)", raw_text)
 
-    # DATES REGEX: Handles BOTH numeric (08/02/2025) and full month names (July 20, 2025)
+    # DATES REGEX: Handles BOTH numeric (08/02/2025) and full/short month names (July 20, 2025)
     dates_pattern = r"((?:[A-Za-z]+\s+\d{1,2},\s*\d{4})|(?:\d{1,2}/\d{1,2}/\d{2,4}))\s+through\s+((?:[A-Za-z]+\s+\d{1,2},\s*\d{4})|(?:\d{1,2}/\d{1,2}/\d{2,4}))"
     dates_match = re.search(dates_pattern, raw_text, re.IGNORECASE)
 
@@ -297,31 +296,38 @@ def process_combined_text(raw_text, sender_name, sender_title):
         return None, None, None, []
 
     df['Date_dt'] = pd.to_datetime(df['Date']).dt.date
-    df_filtered = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)].copy()
-    df_filtered = df_filtered.sort_values(by='Date_dt')
+    df = df.sort_values(by='Date_dt')
+
+    # DUAL SUM CALCULATIONS
+    df_req_period = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)]
+    df_extra_period = df[df['Date_dt'] > req_end]
+
+    requested_sum = df_req_period['Number'].sum()
+    extra_sum = df_extra_period['Number'].sum()
+    total_sap_sum = df['Number'].sum()
 
     # AUDIT CHECK: MISSING BOUNDARIES & >10 DAYS LEAVE GAPS
     missing_dates = []
     sap_warnings = []
     
-    if req_start not in df_filtered['Date_dt'].values:
+    if req_start not in df_req_period['Date_dt'].values:
         missing_dates.append(req_start.strftime("%m/%d/%Y"))
-    if req_end not in df_filtered['Date_dt'].values:
+    if req_end not in df_req_period['Date_dt'].values:
         missing_dates.append(req_end.strftime("%m/%d/%Y"))
 
     # Start-of-period gap check (> 10 Days)
-    if not df_filtered.empty:
-        first_sap_date = df_filtered['Date_dt'].min()
+    if not df_req_period.empty:
+        first_sap_date = df_req_period['Date_dt'].min()
         start_gap = (first_sap_date - req_start).days
         if start_gap > 10:
-            msg = f"Employee returned from leave on {first_sap_date.strftime('%m/%d/%Y')} (First worked date in SAP is {start_gap} days after requested start date {req_start.strftime('%m/%d/%Y')})."
+            msg = f"First worked date in SAP is {first_sap_date.strftime('%m/%d/%Y')} ({start_gap} days after requested start date {req_start.strftime('%m/%d/%Y')})."
             sap_warnings.append(msg)
 
         # End-of-period gap check (> 10 Days)
-        last_sap_date = df_filtered['Date_dt'].max()
+        last_sap_date = df_req_period['Date_dt'].max()
         end_gap = (req_end - last_sap_date).days
         if end_gap > 10:
-            msg = f"Last worked date in SAP is {last_sap_date.strftime('%m/%d/%Y')} ({end_gap} days before requested end date {req_end.strftime('%m/%d/%Y')}). Check SAP Infotype 2001/2006 for leave/vacation."
+            msg = f"Last worked date in SAP within requested period is {last_sap_date.strftime('%m/%d/%Y')} ({end_gap} days before requested end date {req_end.strftime('%m/%d/%Y')}). Check SAP Infotype 2001/2006 for leave/vacation."
             sap_warnings.append(msg)
 
     # Build Excel
@@ -372,7 +378,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
 
     ws_out.row_dimensions[start_table_row].height = 32
 
-    filtered_vals = df_filtered.iloc[:, :11].values
+    filtered_vals = df.iloc[:, :11].values
     for idx, r_vals in enumerate(filtered_vals, start=start_table_row + 1):
         ws_out.row_dimensions[idx].height = 22
         row_fill = ZEBRA_FILL if idx % 2 == 0 else WHITE_FILL
@@ -401,7 +407,7 @@ def process_combined_text(raw_text, sender_name, sender_title):
 
     total_row = start_table_row + len(filtered_vals) + 1
     ws_out.row_dimensions[total_row].height = 26
-    ws_out.cell(row=total_row, column=6, value="Total Hours:").font = FONT_TOTAL
+    ws_out.cell(row=total_row, column=6, value="Grand Total (Full SAP Output):").font = FONT_TOTAL
     ws_out.cell(row=total_row, column=6).alignment = Alignment(horizontal="right", vertical="center")
     ws_out.cell(row=total_row, column=6).border = BORDER_TOTAL
 
@@ -462,24 +468,25 @@ def process_combined_text(raw_text, sender_name, sender_title):
             curr_r += 1
 
     ws_out.merge_cells(f"M{curr_r+1}:N{curr_r+1}")
-    ws_out[f"M{curr_r+1}"] = "TOTAL ACTUAL HOURS WORKED"
+    ws_out[f"M{curr_r+1}"] = f"REQUESTED PERIOD HOURS ({req_start.strftime('%m/%d/%Y')}–{req_end.strftime('%m/%d/%Y')})"
     ws_out[f"M{curr_r+1}"].font = FONT_KPI_LBL
     ws_out[f"M{curr_r+1}"].alignment = Alignment(horizontal="center")
 
     ws_out.merge_cells(f"M{curr_r+2}:N{curr_r+4}")
-    ws_out[f"M{curr_r+2}"] = f"=G{total_row}"
+    ws_out[f"M{curr_r+2}"] = requested_sum
     ws_out[f"M{curr_r+2}"].font = FONT_KPI_VAL
     ws_out[f"M{curr_r+2}"].number_format = "#,##0.00"
     ws_out[f"M{curr_r+2}"].alignment = Alignment(horizontal="center", vertical="center")
 
     ws_out.merge_cells(f"O{curr_r+1}:P{curr_r+1}")
-    ws_out[f"O{curr_r+1}"] = "TOTAL SHIFTS LOGGED"
+    ws_out[f"O{curr_r+1}"] = "GRAND TOTAL (FULL SAP EXPORT)"
     ws_out[f"O{curr_r+1}"].font = FONT_KPI_LBL
     ws_out[f"O{curr_r+1}"].alignment = Alignment(horizontal="center")
 
     ws_out.merge_cells(f"O{curr_r+2}:P{curr_r+4}")
-    ws_out[f"O{curr_r+2}"] = f"=COUNT(G6:G{total_row-1})"
+    ws_out[f"O{curr_r+2}"] = f"=G{total_row}"
     ws_out[f"O{curr_r+2}"].font = FONT_KPI_VAL
+    ws_out[f"O{curr_r+2}"].number_format = "#,##0.00"
     ws_out[f"O{curr_r+2}"].alignment = Alignment(horizontal="center", vertical="center")
 
     for r in range(curr_r+1, curr_r+5):
@@ -517,18 +524,16 @@ def process_combined_text(raw_text, sender_name, sender_title):
     ws_out.column_dimensions['J'].width = 14
     ws_out.column_dimensions['K'].width = 17
     ws_out.column_dimensions['L'].width = 4
-    ws_out.column_dimensions['M'].width = 22
+    ws_out.column_dimensions['M'].width = 28
     ws_out.column_dimensions['N'].width = 22
-    ws_out.column_dimensions['O'].width = 22
+    ws_out.column_dimensions['O'].width = 28
     ws_out.column_dimensions['P'].width = 28
 
     excel_buffer = io.BytesIO()
     wb_out.save(excel_buffer)
     excel_buffer.seek(0)
 
-    # Dynamic Email Response
-    total_hours_val = df_filtered['Number'].sum()
-    
+    # DYNAMIC EMAIL RESPONSE WITH DETAILED DUAL SUM BREAKDOWN
     email_notes = []
     if missing_dates:
         email_notes.append(f"did not work on {' and '.join(missing_dates)}")
@@ -538,9 +543,18 @@ def process_combined_text(raw_text, sender_name, sender_title):
     notes_str = f" ({'; '.join(email_notes)})" if email_notes else ""
     history_str = f"\nEmployment History Record:\n" + "\n".join([f"• {rec}" for rec in employment_records]) + "\n" if employment_records else ""
 
+    if extra_sum > 0:
+        extra_start_date = (req_end + datetime.timedelta(days=1)).strftime('%m/%d/%Y')
+        max_sap_date = df['Date_dt'].max().strftime('%m/%d/%Y')
+        hours_breakdown = f"""• {requested_sum:,.2f} hours worked during requested period ({req_start.strftime('%m/%d/%Y')} through {req_end.strftime('%m/%d/%Y')}){notes_str}
+• {extra_sum:,.2f} additional hours worked after requested period ({extra_start_date} through {max_sap_date})
+• Total hours in attached SAP report: {total_sap_sum:,.2f} hours"""
+    else:
+        hours_breakdown = f"Employee logged {requested_sum:,.2f} total hours worked{notes_str}."
+
     email_response = f"""Per your request. Please see attached report to determine eligible hours. 
 
-Employee logged {total_hours_val:,.2f} total hours worked{notes_str}. 
+{hours_breakdown}
 {history_str}
 Direct any questions to your supervisor.
 
@@ -549,14 +563,14 @@ Thank you,
 {sender_name}
 {sender_title}"""
 
-    return email_response, excel_buffer, output_filename, sap_warnings
+    return email_response, excel_buffer, output_filename, sap_warnings, requested_sum, extra_sum, total_sap_sum
 
 # Process Action
 if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
     else:
-        email_txt, excel_data, filename, warnings = process_combined_text(
+        email_txt, excel_data, filename, warnings, req_sum, extra_sum, total_sum = process_combined_text(
             text_input,
             analyst_name.strip() if analyst_name.strip() else "Anthony Cortez",
             analyst_title.strip() if analyst_title.strip() else "Costco Benefits/HRIS Analyst"
@@ -564,7 +578,16 @@ if st.button("🚀 Process Claim & Generate Report"):
         if email_txt:
             st.success("Claim audit complete!")
 
-            # Display SAP Verification Warnings if gaps > 10 days exist
+            # Display Sum Breakdown Card in Web UI
+            st.markdown("### 📊 Calculated Hours Breakdown")
+            m_col1, m_col2, m_col3 = st.columns(3)
+            with m_col1:
+                st.metric("Requested Period Sum", f"{req_sum:,.2f} hrs")
+            with m_col2:
+                st.metric("Extra Days Sum (Post-Period)", f"{extra_sum:,.2f} hrs")
+            with m_col3:
+                st.metric("Grand Total (Full SAP Table)", f"{total_sum:,.2f} hrs")
+
             if warnings:
                 st.warning("⚠️ **SAP LEAVE DOUBLE-CHECK REQUIRED:**")
                 for w in warnings:
@@ -580,4 +603,3 @@ if st.button("🚀 Process Claim & Generate Report"):
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-            
