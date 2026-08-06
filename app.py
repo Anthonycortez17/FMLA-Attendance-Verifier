@@ -17,7 +17,6 @@ st.set_page_config(
 # ==============================================================================
 # COSTCO LOGO & DYNAMIC DARK/LIGHT ADAPTIVE CSS
 # ==============================================================================
-# Base64 embedded Costco logo from user uploaded image
 COSTCO_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo.svg"
 
 st.markdown("""
@@ -129,7 +128,7 @@ st.markdown("""
 banner_col1, banner_col2 = st.columns([1, 5])
 
 with banner_col1:
-    st.image(COSTCO_LOGO_URL, use_column_width=True)
+    st.image(COSTCO_LOGO_URL, use_container_width=True)
 
 with banner_col2:
     st.markdown("""
