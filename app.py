@@ -103,10 +103,9 @@ Total number of actual hours worked (including overtime hours) during the 12-mon
 ------------------------------------------------------------------------------------------------------------------------
 | Pers.No.|Employee/app.name  |Period|Date      |TmType|TimeTyText  |   Number|Cost Center  |PSubarea |Subarea|Cost Ctr|
 ------------------------------------------------------------------------------------------------------------------------
-|  01234567|CORTEZ ANTHONY    |202508|08/02/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
-|  01234567|CORTEZ ANTHONY    |202508|08/04/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
-|  01234567|CORTEZ ANTHONY    |202508|08/05/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
-|  01234567|CORTEZ ANTHONY    |202608|08/05/2026|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202508|08/20/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202508|08/22/2025|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
+|  01234567|CORTEZ ANTHONY    |202607|07/20/2026|0701  |Hours Worked|    8.00 |STORE-101    |Retail   |0101   |1000101 |
 ------------------------------------------------------------------------------------------------------------------------"""
 
 col_sample, col_clear = st.columns([3, 1])
@@ -186,18 +185,39 @@ def process_combined_text(raw_text, sender_name, sender_title):
     df = parse_sap_table(raw_text)
     if df is None or df.empty:
         st.error("Could not parse SAP table. Ensure table rows start with '|' pipe symbols or standard tab formatting.")
-        return None, None, None
+        return None, None, None, []
 
     df['Date_dt'] = pd.to_datetime(df['Date']).dt.date
+    df_filtered = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)].copy()
+    df_filtered = df_filtered.sort_values(by='Date_dt')
 
+    # ==========================================================================
+    # AUDIT CHECK: MISSING BOUNDARIES & >10 DAYS LEAVE GAPS
+    # ==========================================================================
     missing_dates = []
-    if req_start not in df['Date_dt'].values:
+    sap_warnings = []
+    
+    if req_start not in df_filtered['Date_dt'].values:
         missing_dates.append(req_start.strftime("%m/%d/%Y"))
-    if req_end not in df['Date_dt'].values:
+    if req_end not in df_filtered['Date_dt'].values:
         missing_dates.append(req_end.strftime("%m/%d/%Y"))
 
-    df_filtered = df[(df['Date_dt'] >= req_start) & (df['Date_dt'] <= req_end)].copy()
+    # Start-of-period gap check (> 10 Days)
+    if not df_filtered.empty:
+        first_sap_date = df_filtered['Date_dt'].min()
+        start_gap = (first_sap_date - req_start).days
+        if start_gap > 10:
+            msg = f"Employee returned from leave on {first_sap_date.strftime('%m/%d/%Y')} (First worked date in SAP is {start_gap} days after requested start date {req_start.strftime('%m/%d/%Y')})."
+            sap_warnings.append(msg)
 
+        # End-of-period gap check (> 10 Days)
+        last_sap_date = df_filtered['Date_dt'].max()
+        end_gap = (req_end - last_sap_date).days
+        if end_gap > 10:
+            msg = f"Last worked date in SAP is {last_sap_date.strftime('%m/%d/%Y')} ({end_gap} days before requested end date {req_end.strftime('%m/%d/%Y')}). Check SAP Infotype 2001/2006 for leave/vacation."
+            sap_warnings.append(msg)
+
+    # Build Excel
     wb_out = openpyxl.Workbook()
     ws_out = wb_out.active
     ws_out.title = "FMLA Hours Log"
@@ -289,9 +309,16 @@ def process_combined_text(raw_text, sender_name, sender_title):
         if c not in [6, 7]:
             ws_out.cell(row=total_row, column=c).border = Border(top=Side(border_style="medium", color="0F172A"), bottom=Side(border_style="thin", color="0F172A"))
 
+    # Missing Notes Under Table
     missing_note_row = (total_row - 1) + 5
-    for i, m_date in enumerate(missing_dates):
-        ws_out.cell(row=missing_note_row + i, column=1, value=f"Employee did not work {m_date}").font = FONT_ALERT_BODY
+    note_idx = 0
+    for m_date in missing_dates:
+        ws_out.cell(row=missing_note_row + note_idx, column=1, value=f"Employee did not work {m_date}").font = FONT_ALERT_BODY
+        note_idx += 1
+
+    for warn in sap_warnings:
+        ws_out.cell(row=missing_note_row + note_idx, column=1, value=warn).font = FONT_ALERT_BODY
+        note_idx += 1
 
     # Metrics Card
     ws_out.merge_cells("M1:P2")
@@ -348,14 +375,15 @@ def process_combined_text(raw_text, sender_name, sender_title):
     ws_out["M16"].fill = ALERT_BG_FILL
     ws_out["M16"].alignment = Alignment(horizontal="left", vertical="center", indent=1)
 
-    if missing_dates:
-        for i, m_d in enumerate(missing_dates):
+    all_exceptions = [f"Employee did not work {md}" for md in missing_dates] + sap_warnings
+    if all_exceptions:
+        for i, exc in enumerate(all_exceptions):
             r_idx = 17 + i
             ws_out.merge_cells(start_row=r_idx, start_column=13, end_row=r_idx, end_column=16)
-            ws_out.cell(row=r_idx, column=13, value=f"Employee did not work {m_d}").font = FONT_ALERT_BODY
+            ws_out.cell(row=r_idx, column=13, value=exc).font = FONT_ALERT_BODY
     else:
         ws_out.merge_cells("M17:P17")
-        ws_out["M17"] = "No missing boundary dates detected."
+        ws_out["M17"] = "No missing boundary dates or extended gaps detected."
         ws_out["M17"].font = FONT_BOLD
 
     ws_out.column_dimensions['A'].width = 38
@@ -379,13 +407,20 @@ def process_combined_text(raw_text, sender_name, sender_title):
     wb_out.save(excel_buffer)
     excel_buffer.seek(0)
 
+    # Dynamic Email Response
     total_hours_val = df_filtered['Number'].sum()
-    missing_text = f" and did not work on {' and '.join(missing_dates)}" if missing_dates else ""
+    
+    email_notes = []
+    if missing_dates:
+        email_notes.append(f"did not work on {' and '.join(missing_dates)}")
+    for warn in sap_warnings:
+        email_notes.append(warn)
 
-    # DYNAMIC SIGNATURE
+    notes_str = f" ({'; '.join(email_notes)})" if email_notes else ""
+
     email_response = f"""Per your request. Please see attached report to determine eligible hours. 
 
-Employee logged {total_hours_val:,.2f} total hours worked{missing_text}. 
+Employee logged {total_hours_val:,.2f} total hours worked{notes_str}. 
 
 Direct any questions to your supervisor.
 
@@ -394,20 +429,27 @@ Thank you,
 {sender_name}
 {sender_title}"""
 
-    return email_response, excel_buffer, output_filename
+    return email_response, excel_buffer, output_filename, sap_warnings
 
 # Process Action
 if st.button("🚀 Process Claim & Generate Report"):
     if not text_input.strip():
         st.warning("Please paste text before clicking process.")
     else:
-        email_txt, excel_data, filename = process_combined_text(
+        email_txt, excel_data, filename, warnings = process_combined_text(
             text_input,
             analyst_name.strip() if analyst_name.strip() else "Anthony Cortez",
             analyst_title.strip() if analyst_title.strip() else "Costco Benefits/HRIS Analyst"
         )
         if email_txt:
             st.success("Claim audit complete!")
+
+            # Display SAP Verification Warnings if gaps > 10 days exist
+            if warnings:
+                st.warning("⚠️ **SAP LEAVE DOUBLE-CHECK REQUIRED:**")
+                for w in warnings:
+                    st.write(f"• {w}")
+
             st.subheader("✉️ Ready-to-Send Email Reply")
             st.code(email_txt, language="text")
             
