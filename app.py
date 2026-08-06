@@ -10,15 +10,13 @@ import streamlit as st
 # Page Configuration
 st.set_page_config(
     page_title="HRIS Leave Claim Automation | Benefits Analytics",
-    page_icon="🔴",
+    page_icon="📊",
     layout="wide"
 )
 
 # ==============================================================================
-# COSTCO LOGO & DYNAMIC DARK/LIGHT ADAPTIVE CSS
+# DYNAMIC DARK/LIGHT ADAPTIVE CSS
 # ==============================================================================
-COSTCO_LOGO_URL = "https://upload.wikimedia.org/wikipedia/commons/5/59/Costco_Wholesale_logo.svg"
-
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -28,28 +26,14 @@ st.markdown("""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
 
-    /* Executive Costco Header */
+    /* Executive Header */
     .costco-header-card {
         background: linear-gradient(135deg, #002B49 0%, #00437A 60%, #005DAA 100%);
-        padding: 24px 30px;
+        padding: 26px 32px;
         border-radius: 16px;
         border-bottom: 5px solid #E31837;
         box-shadow: 0 8px 24px rgba(0, 43, 73, 0.25);
         margin-bottom: 25px;
-        display: flex;
-        align-items: center;
-        gap: 24px;
-    }
-
-    .costco-logo-badge {
-        background-color: #FFFFFF;
-        padding: 10px 18px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-        min-width: 150px;
     }
 
     .costco-title-text {
@@ -88,7 +72,7 @@ st.markdown("""
         gap: 8px;
     }
 
-    /* Costco Red Primary Button */
+    /* Primary Accent Button */
     .stButton>button {
         width: 100%;
         background: linear-gradient(135deg, #E31837 0%, #C0132D 100%) !important;
@@ -123,22 +107,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# HEADER BANNER & COSTCO LOGO
+# HEADER BANNER
 # ==============================================================================
-banner_col1, banner_col2 = st.columns([1, 5])
-
-with banner_col1:
-    st.image(COSTCO_LOGO_URL, use_container_width=True)
-
-with banner_col2:
-    st.markdown("""
-        <div class="costco-header-card">
-            <div>
-                <div class="costco-title-text">HRIS FMLA & Leave Claim Automation</div>
-                <div class="costco-subtitle-text">Automated Unum Request & SAP Time Verification Platform | Benefits Analytics</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
+st.markdown("""
+    <div class="costco-header-card">
+        <div class="costco-title-text">📊 HRIS FMLA & Leave Claim Automation</div>
+        <div class="costco-subtitle-text">Automated Unum Request & SAP Time Verification Platform | Benefits Analytics</div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ==============================================================================
 # SESSION USER SETTINGS (Dynamic Analyst Name & Title)
