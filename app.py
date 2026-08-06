@@ -1,4 +1,3 @@
-```python
 import io
 import re
 import datetime
@@ -20,7 +19,7 @@ st.set_page_config(
 # ==============================================================================
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    @import url('[https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap](https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap)');
 
     /* Global Typography */
     html, body, [class*="css"] {
@@ -246,13 +245,13 @@ def parse_dt(d_str):
     
     # Supported formats: Numeric (08/02/2025, 8/2/25) & Words (July 20, 2025, Jul 20 2025)
     formats = (
-        "%m/%d/%Y", "%m/%d/%y", "%n/%d/%Y", "%n/%d/%y",
+        "%m/%d/%Y", "%m/%d/%y",
         "%B %d, %Y", "%B %d %Y", "%b %d, %Y", "%b %d %Y"
     )
     for fmt in formats:
         try:
             return datetime.datetime.strptime(d_str, fmt).date()
-            except ValueError:
+        except ValueError:
             pass
     return datetime.date.today()
 
@@ -581,5 +580,4 @@ if st.button("🚀 Process Claim & Generate Report"):
                 file_name=filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-```
+            
